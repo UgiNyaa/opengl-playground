@@ -22,6 +22,7 @@ private:
 
     uint32_t width, height;
     float max_level;
+    float stride;
     std::vector<float> data;
 
     struct {
@@ -30,6 +31,7 @@ private:
         std::vector<glm::vec3> normals;
         std::vector<uint32_t> indices;
 
+        GLuint vao;
         GLuint vertexbuffer;
         GLuint normalbuffer;
         GLuint elementbuffer;
@@ -40,7 +42,7 @@ private:
     } GL;
 
 public:
-    Terrain(uint32_t width, uint32_t height, float max_level);
+    Terrain(uint32_t width, uint32_t height, float max_level = 1, float stride = 1);
     ~Terrain();
 
     uint32_t get_width() const;

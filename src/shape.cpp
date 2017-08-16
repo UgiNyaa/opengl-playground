@@ -113,6 +113,9 @@ void Shape::initialize()
 
     // buffer initialization
     {
+        glGenVertexArrays(1, &vao);
+        glBindVertexArray(vao);
+
         glGenBuffers(1, &vertexbuffer);
         glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
         glBufferData
@@ -122,6 +125,7 @@ void Shape::initialize()
             vertices.data(), 
             GL_STATIC_DRAW
         );
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
         glGenBuffers(1, &uvbuffer);
         glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
@@ -132,6 +136,7 @@ void Shape::initialize()
             uvs.data(),
             GL_STATIC_DRAW
         );
+        glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
         glGenBuffers(1, &elementbuffer);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementbuffer);
@@ -142,6 +147,10 @@ void Shape::initialize()
             indices.data(),
             GL_STATIC_DRAW
         );
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
     }
 
     mvpID = glGetUniformLocation(pID, "MVP");
@@ -163,13 +172,9 @@ void Shape::draw
     glUniformMatrix4fv(mvpID, 1, GL_FALSE, &mvp[0][0]);
     glUniform3fv(colourmultiplierID, 1, &colourmultiplier[0]);
 
+    glBindVertexArray(vao);
     glEnableVertexAttribArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, vertexbuffer);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
-
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, uvbuffer);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, elementbuffer);
     glDrawElements
@@ -179,7 +184,9 @@ void Shape::draw
         GL_UNSIGNED_INT,
         (void*)0
     );
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     glDisableVertexAttribArray(0);
     glDisableVertexAttribArray(1);
+    glBindVertexArray(0);
 }

@@ -34,10 +34,11 @@ void main()
 }
 )";
 
-Terrain::Terrain(uint32_t width, uint32_t height, float max_level)
+Terrain::Terrain(uint32_t width, uint32_t height, float max_level, float stride)
     : width(width)
     , height(height)
     , max_level(max_level)
+    , stride(stride)
 {
     data.resize(width * height);
 }
@@ -49,13 +50,20 @@ Terrain::~Terrain()
     glDeleteProgram(GL.pID);
 }
 
-uint32_t Terrain::get_height() const { return height; }
-uint32_t Terrain::get_width() const { return width; }
+uint32_t Terrain::get_height() const { return height * stride; }
+uint32_t Terrain::get_width() const { return width * stride; }
 
 float Terrain::get_level(float x, float z) const
 {
-    // TODO: linear interpolation
-    return data[std::floor(x) + height * std::floor(z)] * max_level;
+    auto d = data[std::floor(x / stride) + height * std::floor(z / stride)] * max_level;
+
+    auto kx = data[std::floor(x / stride) + 1 + height * std::floor(z / stride)] * max_level
+        - data[std::floor(x / stride) + height * std::floor(z / stride)] * max_level;
+    
+    auto kz = data[std::floor(x / stride) + height * std::floor(z / stride) + 1] * max_level
+        - data[std::floor(x / stride) + height * std::floor(z / stride)] * max_level;
+
+    return kx * (x - std::floor(x)) + kz * (z - std::floor(z)) + d;
 }
 
 void Terrain::load(std::string imagepath)
@@ -94,44 +102,60 @@ void Terrain::initialize()
 
     // vertex, uv, index data initialization
     {
-        // TODO: use triangle stip
-        GL.vertices.resize(height * width);
-        GL.normals.resize(height * width);
-
-        for (size_t z = 0; z < height; z++)
-            for (size_t x = 0; x < width; x++)
+        GL.vertices.resize(width * height);
+        GL.normals.resize(width * height);
+        for (float z = 0; z < (height * stride); z += stride)
+            for (float x = 0; x < (width * stride); x += stride)
             {
-                auto root = x + z * height;
-                auto x_next = (x+1) + z * height;
-                auto z_next = x + (z + 1) * height;
-                auto xz_next = (x+1) + (z+1) * height;
-
-                GL.vertices[root] = glm::vec3(x, get_level(x, z), z);
-
-                if (z < height - 1)
-                {
-                    GL.indices.push_back(root);
-                    GL.indices.push_back(z_next);
-                    GL.indices.push_back(xz_next);
-
-                    GL.indices.push_back(root);
-                    GL.indices.push_back(xz_next);
-                    GL.indices.push_back(x_next);
-                }
+                int i = (x/stride) + (z/stride) * width;
+                GL.vertices[i] = glm::vec3(x, get_level(x, z), z);
 
                 auto hL = get_level(x - 1.0f, z - 0.0f);
                 auto hR = get_level(x + 1.0f, z + 0.0f);
                 auto hD = get_level(x - 0.0f, z - 1.0f);
                 auto hU = get_level(x + 0.0f, z + 1.0f);
-
-                GL.normals[root] = glm::vec3(hL - hR, 2.0f, hD - hU);
-                GL.normals[root] = glm::normalize(GL.normals[root]);
+                GL.normals[i] = glm::vec3(hL - hR, 2.0f, hD - hU);
+                GL.normals[i] = glm::normalize(GL.normals[i]);
             }
-
+        
+        GL.indices.resize((width * 2) * (height - 1) + (height - 2));
+        int index = 0;
+        for (uint32_t z = 0; z < height - 1; z++)
+        {
+            if (z % 2 == 0)
+            {
+                uint32_t x;
+                for (x = 0; x < width; x++)
+                {
+                    GL.indices[index++] = x + (z * width);
+                    GL.indices[index++] = x + (z * width) + width;
+                }
+                if (z != height - 2)
+                {
+                    GL.indices[index++] = --x + (z * width);
+                }
+            }
+            else
+            {
+                int x;
+                for (x = width - 1; x >= 0; x--)
+                {
+                    GL.indices[index++] = x + (z * width);
+                    GL.indices[index++] = x + (z * width) + width;
+                }
+                if (z != height - 2)
+                {
+                    GL.indices[index++] = ++x + (z * width);
+                }
+            }
+        }
     }
 
     // buffer initialization
     {
+        glGenVertexArrays(1, &GL.vao);
+        glBindVertexArray(GL.vao);
+        
         glGenBuffers(1, &GL.vertexbuffer);
         glBindBuffer(GL_ARRAY_BUFFER, GL.vertexbuffer);
         glBufferData
@@ -141,6 +165,7 @@ void Terrain::initialize()
             GL.vertices.data(), 
             GL_STATIC_DRAW
         );
+        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
 
         glGenBuffers(1, &GL.normalbuffer);
         glBindBuffer(GL_ARRAY_BUFFER, GL.normalbuffer);
@@ -151,6 +176,7 @@ void Terrain::initialize()
             GL.normals.data(), 
             GL_STATIC_DRAW
         );
+        glVertexAttribPointer(1, 3, GL_FLOAT, GL_TRUE, 0, (void*)0);
 
         glGenBuffers(1, &GL.elementbuffer);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, GL.elementbuffer);
@@ -161,6 +187,10 @@ void Terrain::initialize()
             GL.indices.data(),
             GL_STATIC_DRAW
         );
+
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        glBindVertexArray(0);
     }
 
     GL.mvpID = glGetUniformLocation(GL.pID, "MVP");
@@ -182,23 +212,21 @@ void Terrain::draw
     glUniformMatrix4fv(GL.mvpID, 1, GL_FALSE, &mvp[0][0]);
     glUniform3fv(GL.colourmultiplierID, 1, &colourmultiplier[0]);
 
+    glBindVertexArray(GL.vao);
     glEnableVertexAttribArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, GL.vertexbuffer);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, (void*)0);
-
     glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, GL.normalbuffer);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_TRUE, 0, (void*)0);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, GL.elementbuffer);
     glDrawElements
     (
-        GL_TRIANGLES,
+        GL_TRIANGLE_STRIP,
         GL.indices.size(),
         GL_UNSIGNED_INT,
         (void*)0
     );
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     glDisableVertexAttribArray(0);
     glDisableVertexAttribArray(1);
+    glBindVertexArray(0);
 }

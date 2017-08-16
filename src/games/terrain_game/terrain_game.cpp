@@ -17,7 +17,7 @@ void TerrainGame::initialize(int argc, char *argv[])
     player.shape = std::make_unique<Shape>("resources/movement_game/block.obj");
     player.shape->initialize();
 
-    terrain = std::make_unique<Terrain>(500, 500, 3);
+    terrain = std::make_unique<Terrain>(500, 500, 3, 3);
     terrain->load("resources/heightmap.png");
     terrain->initialize();
 

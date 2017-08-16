@@ -25,6 +25,7 @@ private:
     std::vector<glm::vec2> uvs;
     std::vector<uint32_t> indices;
 
+    GLuint vao;
     GLuint vertexbuffer;
     GLuint uvbuffer;
     GLuint elementbuffer;
