@@ -55,15 +55,48 @@ uint32_t Terrain::get_width() const { return width * stride; }
 
 float Terrain::get_level(float x, float z) const
 {
-    auto d = data[std::floor(x / stride) + height * std::floor(z / stride)] * max_level;
+	x /= stride;
+	z /= stride;
+	int x1 = std::floor(x);
+	int x2 = std::floor(x) + 1;
+	int z1 = std::floor(z);
+	int z2 = std::floor(z) + 1;
 
-    auto kx = data[std::floor(x / stride) + 1 + height * std::floor(z / stride)] * max_level
-        - data[std::floor(x / stride) + height * std::floor(z / stride)] * max_level;
-    
-    auto kz = data[std::floor(x / stride) + height * std::floor(z / stride) + 1] * max_level
-        - data[std::floor(x / stride) + height * std::floor(z / stride)] * max_level;
+	if (x2 == width)
+	{
+		x2--;
+		x1--;
+	}
 
-    return kx * (x - std::floor(x)) + kz * (z - std::floor(z)) + d;
+	if (z2 == height)
+	{
+		z2--;
+		z1--;
+	}
+
+	if (x2 == 0)
+	{
+		x2++;
+		x1++;
+	}
+
+	if (z2 == 0)
+	{
+		z2++;
+		z1++;
+	}
+
+	auto fq11 = data[z1 * width + x1];
+	auto fq12 = data[z2 * width + x1];
+	auto fq21 = data[z1 * width + x2];
+	auto fq22 = data[z2 * width + x2];
+
+	auto r1 = ((x2 - x) / (x2 - x1)) * fq11 + ((x - x1) / (x2 - x1)) * fq21;
+	auto r2 = ((x2 - x) / (x2 - x1)) * fq12 + ((x - x1) / (x2 - x1)) * fq22;
+
+	auto fxy = ((z2 - z) / (z2 - z1)) * r1 + ((z - z1) / (z2 - z1)) * r2;
+
+	return fxy * max_level;
 }
 
 void Terrain::load(std::string imagepath)
@@ -114,7 +147,7 @@ void Terrain::initialize()
                 auto hR = get_level(x + 1.0f, z + 0.0f);
                 auto hD = get_level(x - 0.0f, z - 1.0f);
                 auto hU = get_level(x + 0.0f, z + 1.0f);
-                GL.normals[i] = glm::vec3(hL - hR, 2.0f, hD - hU);
+                GL.normals[i] = glm::vec3(hL - hR, 2.0, hD - hU);
                 GL.normals[i] = glm::normalize(GL.normals[i]);
             }
         
